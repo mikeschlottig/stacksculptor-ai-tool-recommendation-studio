@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import React, { useState } from 'react';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Slider } from '@/components/ui/slider';
@@ -47,13 +49,12 @@ const integrationsOptions = [
 interface OnboardingWizardProps {
   onSubmit: (data: UserProfile) => void;
   isGenerating: boolean;
-  initialValues?: UserProfile | null;
 }
-export function OnboardingWizard({ onSubmit, isGenerating, initialValues }: OnboardingWizardProps) {
+export function OnboardingWizard({ onSubmit, isGenerating }: OnboardingWizardProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const form = useForm<OnboardingFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: initialValues || {
+    defaultValues: {
       useCase: '',
       ambition: 'discovery',
       budget: 50,
@@ -61,11 +62,6 @@ export function OnboardingWizard({ onSubmit, isGenerating, initialValues }: Onbo
       integrations: [],
     },
   });
-  useEffect(() => {
-    if (initialValues) {
-      form.reset(initialValues);
-    }
-  }, [initialValues, form]);
   const processForm = (data: OnboardingFormValues) => {
     onSubmit(data);
   };

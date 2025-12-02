@@ -1,148 +1,178 @@
-// Home page of the app, Currently a demo page for demonstration.
-// Please rewrite this file to implement your own logic. Do not replace or delete it, simply rewrite this HomePage.tsx file.
-import { useEffect } from 'react'
-import { Sparkles } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { ThemeToggle } from '@/components/ThemeToggle'
-import { Toaster, toast } from '@/components/ui/sonner'
-import { create } from 'zustand'
-import { useShallow } from 'zustand/react/shallow'
-import { AppLayout } from '@/components/layout/AppLayout'
-
-// Timer store: independent slice with a clear, minimal API, for demonstration
-type TimerState = {
-  isRunning: boolean;
-  elapsedMs: number;
-  start: () => void;
-  pause: () => void;
-  reset: () => void;
-  tick: (deltaMs: number) => void;
-}
-
-const useTimerStore = create<TimerState>((set) => ({
-  isRunning: false,
-  elapsedMs: 0,
-  start: () => set({ isRunning: true }),
-  pause: () => set({ isRunning: false }),
-  reset: () => set({ elapsedMs: 0, isRunning: false }),
-  tick: (deltaMs) => set((s) => ({ elapsedMs: s.elapsedMs + deltaMs })),
-}))
-
-// Counter store: separate slice to showcase multiple stores without coupling
-type CounterState = {
-  count: number;
-  inc: () => void;
-  reset: () => void;
-}
-
-const useCounterStore = create<CounterState>((set) => ({
-  count: 0,
-  inc: () => set((s) => ({ count: s.count + 1 })),
-  reset: () => set({ count: 0 }),
-}))
-
-function formatDuration(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000))
-  const m = Math.floor(total / 60)
-  const s = total % 60
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
-
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Bot, BrainCircuit, FileText, LifeBuoy, Sparkles, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Toaster, toast } from 'sonner';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { OnboardingWizard } from '@/components/OnboardingWizard';
+import { RecommendationCard } from '@/components/RecommendationCard';
+import { SupportChatPanel } from '@/components/SupportChatPanel';
+import { RecommendationExports } from '@/pages/RecommendationExports';
+import { generateRecommendation, UserProfile, RecommendationStack } from '@/lib/recommendation';
+import { Skeleton } from '@/components/ui/skeleton';
+import { chatService } from '@/lib/chat';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+type AppState = 'idle' | 'onboarding' | 'generating' | 'results';
 export function HomePage() {
-  // Select only what is needed to avoid unnecessary re-renders
-  const { isRunning, elapsedMs } = useTimerStore(
-    useShallow((s) => ({ isRunning: s.isRunning, elapsedMs: s.elapsedMs })),
-  )
-  const start = useTimerStore((s) => s.start)
-  const pause = useTimerStore((s) => s.pause)
-  const resetTimer = useTimerStore((s) => s.reset)
-  const count = useCounterStore((s) => s.count)
-  const inc = useCounterStore((s) => s.inc)
-  const resetCount = useCounterStore((s) => s.reset)
-
-  // Drive the timer only while running; avoid update-depth issues with a scoped RAF
+  const [appState, setAppState] = useState<AppState>('idle');
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [recommendation, setRecommendation] = useState<RecommendationStack | null>(null);
+  const [streamingText, setStreamingText] = useState('');
+  const [isSupportChatOpen, setIsSupportChatOpen] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(() => {
+    return localStorage.getItem('stacksculptor_subscribed') === 'true';
+  });
   useEffect(() => {
-    if (!isRunning) return
-    let raf = 0
-    let last = performance.now()
-    const loop = () => {
-      const now = performance.now()
-      const delta = now - last
-      last = now
-      // Read store API directly to keep effect deps minimal and stable
-      useTimerStore.getState().tick(delta)
-      raf = requestAnimationFrame(loop)
+    localStorage.setItem('stacksculptor_subscribed', String(isSubscribed));
+  }, [isSubscribed]);
+  const handleStart = () => {
+    if (!isSubscribed) {
+      toast.error('Subscription Required', {
+        description: 'Please subscribe for $20/month to generate a custom stack.',
+        action: {
+          label: 'Subscribe Now',
+          onClick: () => setIsSubscribed(true),
+        },
+      });
+      return;
     }
-    raf = requestAnimationFrame(loop)
-    return () => cancelAnimationFrame(raf)
-  }, [isRunning])
-
-  const onPleaseWait = () => {
-    inc()
-    if (!isRunning) {
-      start()
-      toast.success('Building your app…', {
-        description: 'Hang tight, we\'re setting everything up.',
-      })
+    setAppState('onboarding');
+  };
+  const handleWizardSubmit = async (data: UserProfile) => {
+    setUserProfile(data);
+    setAppState('generating');
+    setRecommendation(null);
+    setStreamingText('');
+    const { parsed } = await generateRecommendation(data, (chunk) => {
+      setStreamingText((prev) => prev + chunk);
+    });
+    if (parsed) {
+      setRecommendation(parsed);
+      setAppState('results');
+      toast.success('Your custom AI stack is ready!');
     } else {
-      pause()
-      toast.info('Taking a short pause', {
-        description: 'We\'ll continue shortly.',
-      })
+      setAppState('onboarding'); // Go back to edit
+      toast.error('Failed to generate stack', {
+        description: 'The AI failed to return a valid recommendation. Please try adjusting your inputs or try again later.',
+      });
     }
-  }
-
-  const formatted = formatDuration(elapsedMs)
-
+  };
+  const handleReset = () => {
+    setAppState('onboarding');
+    setRecommendation(null);
+    setUserProfile(null);
+    setStreamingText('');
+  };
+  const renderContent = () => {
+    switch (appState) {
+      case 'generating':
+        return (
+          <div className="text-center space-y-6 animate-fade-in">
+            <div className="flex justify-center">
+              <motion.div
+                className="w-24 h-24 rounded-full bg-gradient-primary flex items-center justify-center shadow-primary"
+                animate={{ scale: [1, 1.1, 1] }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <BrainCircuit className="w-12 h-12 text-white" />
+              </motion.div>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-display font-bold">Sculpting Your Stack...</h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto">Our AI is analyzing your requirements to build the perfect combination of tools. This may take a moment.</p>
+            <Card className="text-left bg-secondary/50 max-w-3xl mx-auto">
+              <CardContent className="p-6">
+                <pre className="whitespace-pre-wrap text-sm font-mono text-muted-foreground max-h-64 overflow-y-auto">
+                  {streamingText}
+                  <span className="animate-pulse">▋</span>
+                </pre>
+              </CardContent>
+            </Card>
+          </div>
+        );
+      case 'results':
+        return (
+          <div className="w-full animate-fade-in">
+            <div className="text-center mb-12">
+              <h1 className="text-4xl md:text-5xl font-display font-bold text-balance leading-tight mb-4">{recommendation?.title}</h1>
+              <p className="text-lg text-muted-foreground max-w-3xl mx-auto">{recommendation?.summary}</p>
+              <div className="mt-6 flex justify-center items-center gap-4 text-xl font-semibold">
+                <span>Estimated Monthly Cost:</span>
+                <span className="text-3xl font-bold text-gradient">${recommendation?.estimatedTotalMonthlyCost}</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {recommendation?.tools.map((tool, index) => (
+                <RecommendationCard key={tool.toolName} tool={tool} index={index} />
+              )) ?? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-96 rounded-2xl" />)}
+            </div>
+            <div className="mt-12 flex flex-col sm:flex-row justify-center items-center gap-6">
+              <RecommendationExports stack={recommendation} />
+              <Button variant="secondary" onClick={handleReset}>Start Over</Button>
+              <Button variant="outline" onClick={() => setIsSupportChatOpen(true)}>
+                <LifeBuoy className="mr-2 h-4 w-4" /> Ask for Changes
+              </Button>
+            </div>
+          </div>
+        );
+      case 'onboarding':
+        return (
+          <Card className="w-full max-w-3xl mx-auto p-6 md:p-8 animate-fade-in shadow-2xl bg-card/80 backdrop-blur-lg">
+            <OnboardingWizard onSubmit={handleWizardSubmit} isGenerating={appState === 'generating'} />
+          </Card>
+        );
+      case 'idle':
+      default:
+        return (
+          <div className="text-center space-y-8 animate-fade-in">
+            <div className="flex justify-center">
+              <div className="w-24 h-24 rounded-3xl bg-gradient-primary flex items-center justify-center shadow-primary floating">
+                <Sparkles className="w-12 h-12 text-white rotating" />
+              </div>
+            </div>
+            <h1 className="text-5xl md:text-7xl font-display font-bold text-balance leading-tight">
+              Stop Guessing. <br /> Start <span className="text-gradient">Building</span>.
+            </h1>
+            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto text-pretty">
+              Overwhelmed by AI tools? Tell us your goal, and we'll design a custom, actionable tool stack with a step-by-step guide—in minutes.
+            </p>
+            <Button size="lg" className="btn-gradient px-10 py-6 text-xl font-semibold" onClick={handleStart}>
+              Get Your Custom Stack
+            </Button>
+          </div>
+        );
+    }
+  };
   return (
-    <AppLayout>
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background text-foreground p-4 overflow-hidden relative">
-        <ThemeToggle />
-        <div className="absolute inset-0 bg-gradient-rainbow opacity-10 dark:opacity-20 pointer-events-none" />
-        <div className="text-center space-y-8 relative z-10 animate-fade-in">
-          <div className="flex justify-center">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-primary flex items-center justify-center shadow-primary floating">
-              <Sparkles className="w-8 h-8 text-white rotating" />
+    <div className="min-h-screen bg-background text-foreground relative">
+      <ThemeToggle />
+      <div className="absolute inset-0 -z-10 h-full w-full bg-background bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] dark:bg-[radial-gradient(#ffffff20_1px,transparent_1px)]"></div>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="py-16 md:py-24 lg:py-32 flex items-center justify-center min-h-screen">
+          {renderContent()}
+        </div>
+      </main>
+      <footer className="absolute bottom-0 left-0 right-0 p-4">
+        <div className="max-w-7xl mx-auto text-center text-muted-foreground text-sm space-y-2">
+          <div className="flex items-center justify-center gap-4 bg-secondary/50 p-2 rounded-lg max-w-md mx-auto">
+            <div className="flex items-center space-x-2">
+              <Label htmlFor="sub-toggle">{isSubscribed ? "You are subscribed!" : "Mock Subscription ($20/mo)"}</Label>
+              <Switch id="sub-toggle" checked={isSubscribed} onCheckedChange={setIsSubscribed} />
             </div>
           </div>
-          <h1 className="text-5xl md:text-7xl font-display font-bold text-balance leading-tight">
-            Creating your <span className="text-gradient">app</span>
-          </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-xl mx-auto text-pretty">
-            Your application would be ready soon.
-          </p>
-          <div className="flex justify-center gap-4">
-            <Button 
-              size="lg"
-              onClick={onPleaseWait}
-              className="btn-gradient px-8 py-4 text-lg font-semibold hover:-translate-y-0.5 transition-all duration-200"
-              aria-live="polite"
-            >
-              Please Wait
-            </Button>
-          </div>
-          <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
-            <div>
-              Time elapsed: <span className="font-medium tabular-nums text-foreground">{formatted}</span>
-            </div>
-            <div>
-              Coins: <span className="font-medium tabular-nums text-foreground">{count}</span>
-            </div>
-          </div>
-          <div className="flex justify-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => { resetTimer(); resetCount(); toast('Reset complete') }}>
-              Reset
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => { inc(); toast('Coin added') }}>
-              Add Coin
-            </Button>
+          <div className="flex items-center justify-center gap-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg max-w-2xl mx-auto">
+            <AlertTriangle className="size-4 text-amber-500 flex-shrink-0" />
+            <span>AI requests are subject to rate limits across all users. Built with ❤️ at Cloudflare.</span>
           </div>
         </div>
-        <footer className="absolute bottom-8 text-center text-muted-foreground/80">
-          <p>Powered by Cloudflare</p>
-        </footer>
-        <Toaster richColors closeButton />
-      </div>
-    </AppLayout>
-  )
+      </footer>
+      <SupportChatPanel
+        open={isSupportChatOpen}
+        onOpenChange={setIsSupportChatOpen}
+        sessionId={chatService.getSessionId()}
+      />
+      <Toaster richColors closeButton />
+    </div>
+  );
 }

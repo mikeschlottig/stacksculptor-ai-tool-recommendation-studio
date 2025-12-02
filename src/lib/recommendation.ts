@@ -16,7 +16,6 @@ export interface ToolRecommendation {
     language: string;
     code: string;
   };
-  affiliateParam?: string;
 }
 // Define the structure for the entire recommendation stack
 export interface RecommendationStack {
@@ -45,7 +44,7 @@ function buildPrompt(profile: UserProfile): string {
     **USER PROFILE:**
     - **Primary Use Case:** ${profile.useCase}
     - **Ambition/Success Criteria:** ${profile.ambition}
-    - **Monthly Budget:** Up to ${profile.budget}
+    - **Monthly Budget:** Up to $${profile.budget}
     - **Key Constraints:** ${profile.constraints.join(', ') || 'None'}
     - **Desired Integrations:** ${profile.integrations.join(', ') || 'None'}
     **YOUR TASK:**
@@ -65,7 +64,7 @@ function buildPrompt(profile: UserProfile): string {
         step2: string; // Actionable second step.
         step3: string; // Actionable third step.
       };
-      docsUrl: string; // A valid URL to the official documentation. For affiliate tracking, append ?ref=stacksculptor if possible.
+      docsUrl: string; // A valid URL to the official documentation.
       quickstartSnippet?: {
         language: string; // e.g., 'typescript', 'python'
         code: string; // A short, copyable code snippet.
@@ -90,7 +89,7 @@ function buildPrompt(profile: UserProfile): string {
 /**
  * Attempts to parse a JSON string, with a fallback to extract it from a larger text block.
  * @param raw - The raw string response from the AI.
- * @returns The parsed RecommendationStack object or a fallback object if parsing fails.
+ * @returns The parsed RecommendationStack object or null if parsing fails.
  */
 export function parseRecommendation(raw: string): RecommendationStack | null {
   try {
@@ -105,34 +104,12 @@ export function parseRecommendation(raw: string): RecommendationStack | null {
         return JSON.parse(jsonString) as RecommendationStack;
       } catch (parseError) {
         console.error("Failed to parse extracted JSON:", parseError);
+        return null;
       }
-    }
-  }
-  // Final check for malformed responses with error prefixes
-  const cleaned = raw.replace(/^Error:.*?\n/, '').trim();
-  const match = cleaned.match(/\{[\s\S]*\}/);
-  if (match) {
-    try {
-      return JSON.parse(match[0]) as RecommendationStack;
-    } catch (finalError) {
-      console.error("Failed final parse attempt:", finalError);
     }
   }
   console.error("No valid JSON found in the response.");
   return null;
-}
-export async function saveRecommendation(stack: RecommendationStack, sessionId = chatService.getSessionId()): Promise<{ success: boolean }> {
-  try {
-    const res = await fetch('/api/recommendations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, recommendation: stack }),
-    });
-    return await res.json();
-  } catch (error) {
-    console.error("Failed to save recommendation:", error);
-    return { success: false };
-  }
 }
 /**
  * Generates a recommendation stack by sending a structured prompt to the AI.
@@ -147,7 +124,7 @@ export async function generateRecommendation(
   const prompt = buildPrompt(profile);
   let fullResponse = "";
   // Create a new session for this recommendation
-  const sessionRes = await chatService.createSession(`Stack for: ${profile.useCase.substring(0, 30)}...`);
+  const sessionRes = await chatService.createSession("StackSculptor Recommendation");
   if (sessionRes.success && sessionRes.data) {
     chatService.switchSession(sessionRes.data.sessionId);
   } else {
@@ -159,30 +136,5 @@ export async function generateRecommendation(
     onChunk(chunk); // Pass chunk to UI for live display
   });
   const parsed = parseRecommendation(fullResponse);
-  if (parsed) {
-    // Ensure affiliate links are present
-    parsed.tools.forEach(t => {
-      if (t.docsUrl && !t.docsUrl.includes('?')) {
-        t.docsUrl += '?ref=stacksculptor';
-      }
-    });
-    await saveRecommendation(parsed, chatService.getSessionId());
-  }
   return { raw: fullResponse, parsed };
-}
-export function saveUserProfile(profile: UserProfile) {
-  try {
-    localStorage.setItem('stacksculptor_profile', JSON.stringify(profile));
-  } catch (error) {
-    console.warn("Could not save user profile to localStorage:", error);
-  }
-}
-export function loadUserProfile(): UserProfile | null {
-  try {
-    const stored = localStorage.getItem('stacksculptor_profile');
-    return stored ? JSON.parse(stored) : null;
-  } catch (error) {
-    console.warn("Could not load user profile from localStorage:", error);
-    return null;
-  }
 }

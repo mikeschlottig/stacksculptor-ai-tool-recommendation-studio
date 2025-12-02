@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ToolRecommendation } from '@/lib/recommendation';
 import { CheckCircle, ChevronDown, Clipboard, Code, ExternalLink, Zap } from 'lucide-react';
 import { toast } from 'sonner';
@@ -91,50 +89,15 @@ export function RecommendationCard({ tool, index }: RecommendationCardProps) {
                 </pre>
               </motion.div>
             )}
+            <div className="flex gap-2 mt-4">
+              <Button asChild className="w-full">
+                <a href={tool.docsUrl} target="_blank" rel="noopener noreferrer">
+                  Open Docs <ExternalLink className="ml-2 size-4" />
+                </a>
+              </Button>
+            </div>
           </div>
         </CardContent>
-        <CardFooter className="flex flex-col sm:flex-row gap-2">
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="secondary" className="w-full">
-                <Zap className="mr-2 size-4" /> Integrate Now
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Integrate {tool.toolName}</DialogTitle>
-                <DialogDescription>
-                  Follow these steps to connect {tool.toolName} to your project.
-                </DialogDescription>
-              </DialogHeader>
-              <Accordion type="single" collapsible defaultValue="step-1" className="w-full">
-                <AccordionItem value="step-1">
-                  <AccordionTrigger>Step 1: Get API Key</AccordionTrigger>
-                  <AccordionContent>
-                    Log in to your {tool.toolName} dashboard, navigate to the API section, and generate a new secret key.
-                  </AccordionContent>
-                </AccordionItem>
-                <AccordionItem value="step-2">
-                  <AccordionTrigger>Step 2: Set Environment Variable</AccordionTrigger>
-                  <AccordionContent>
-                    Add the API key to your project's environment variables. For example: `TOOL_API_KEY="your_key_here"`.
-                  </AccordionContent>
-                </AccordionItem>
-                <AccordionItem value="step-3">
-                  <AccordionTrigger>Step 3: Test Connection</AccordionTrigger>
-                  <AccordionContent>
-                    Use the quickstart snippet provided in the card to make a test API call and verify the connection.
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            </DialogContent>
-          </Dialog>
-          <Button asChild className="w-full">
-            <a href={`${tool.docsUrl}?ref=stacksculptor`} target="_blank" rel="noopener noreferrer">
-              Open Docs <ExternalLink className="ml-2 size-4" />
-            </a>
-          </Button>
-        </CardFooter>
       </Card>
     </motion.div>
   );
