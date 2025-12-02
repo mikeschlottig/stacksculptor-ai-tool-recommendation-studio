@@ -16,6 +16,7 @@ export interface ToolRecommendation {
     language: string;
     code: string;
   };
+  affiliateParam?: string;
 }
 // Define the structure for the entire recommendation stack
 export interface RecommendationStack {
@@ -64,7 +65,7 @@ function buildPrompt(profile: UserProfile): string {
         step2: string; // Actionable second step.
         step3: string; // Actionable third step.
       };
-      docsUrl: string; // A valid URL to the official documentation.
+      docsUrl: string; // A valid URL to the official documentation. For affiliate tracking, append ?ref=stacksculptor if possible.
       quickstartSnippet?: {
         language: string; // e.g., 'typescript', 'python'
         code: string; // A short, copyable code snippet.
@@ -89,7 +90,7 @@ function buildPrompt(profile: UserProfile): string {
 /**
  * Attempts to parse a JSON string, with a fallback to extract it from a larger text block.
  * @param raw - The raw string response from the AI.
- * @returns The parsed RecommendationStack object or null if parsing fails.
+ * @returns The parsed RecommendationStack object or a fallback object if parsing fails.
  */
 export function parseRecommendation(raw: string): RecommendationStack | null {
   try {
@@ -104,8 +105,17 @@ export function parseRecommendation(raw: string): RecommendationStack | null {
         return JSON.parse(jsonString) as RecommendationStack;
       } catch (parseError) {
         console.error("Failed to parse extracted JSON:", parseError);
-        return null;
       }
+    }
+  }
+  // Final check for malformed responses with error prefixes
+  const cleaned = raw.replace(/^Error:.*?\n/, '').trim();
+  const match = cleaned.match(/\{[\s\S]*\}/);
+  if (match) {
+    try {
+      return JSON.parse(match[0]) as RecommendationStack;
+    } catch (finalError) {
+      console.error("Failed final parse attempt:", finalError);
     }
   }
   console.error("No valid JSON found in the response.");
@@ -150,6 +160,12 @@ export async function generateRecommendation(
   });
   const parsed = parseRecommendation(fullResponse);
   if (parsed) {
+    // Ensure affiliate links are present
+    parsed.tools.forEach(t => {
+      if (t.docsUrl && !t.docsUrl.includes('?')) {
+        t.docsUrl += '?ref=stacksculptor';
+      }
+    });
     await saveRecommendation(parsed, chatService.getSessionId());
   }
   return { raw: fullResponse, parsed };

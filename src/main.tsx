@@ -13,6 +13,7 @@ import '@/index.css'
 import { HomePage } from '@/pages/HomePage'
 import { Dashboard } from '@/pages/Dashboard';
 import { Pricing } from '@/pages/Pricing';
+import { Marketplace } from '@/pages/Marketplace';
 const router = createBrowserRouter([
   {
     path: "/",
@@ -27,6 +28,11 @@ const router = createBrowserRouter([
   {
     path: "/pricing",
     element: <Pricing />,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/marketplace",
+    element: <Marketplace />,
     errorElement: <RouteErrorBoundary />,
   },
 ]);

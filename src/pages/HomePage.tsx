@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { Bot, BrainCircuit, FileText, LifeBuoy, Sparkles, AlertTriangle, LayoutDashboard, DollarSign } from 'lucide-react';
+import { Bot, BrainCircuit, FileText, LifeBuoy, Sparkles, AlertTriangle, LayoutDashboard, DollarSign, BarChart, TrendingUp, Package, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Toaster, toast } from 'sonner';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { OnboardingWizard } from '@/components/OnboardingWizard';
@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { chatService } from '@/lib/chat';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 type AppState = 'idle' | 'onboarding' | 'generating' | 'results';
 async function getRecommendationBySession(sessionId: string): Promise<RecommendationStack | null> {
   try {
@@ -98,7 +99,6 @@ export function HomePage() {
         setUserProfile(mockProfile);
         setAppState('onboarding');
         toast.info(`Loaded the "${template.replace('-', ' ')}" template!`);
-        // Clean the URL
         setSearchParams({}, { replace: true });
       } else {
         toast.error("Invalid template specified.");
@@ -134,7 +134,7 @@ export function HomePage() {
     const { parsed } = await generateRecommendation(data, (chunk) => {
       setStreamingText((prev) => prev + chunk);
     });
-    if (parsed) {
+    if (parsed && parsed.tools.length > 0) {
       setRecommendation(parsed);
       setAppState('results');
       toast.success('Your custom AI stack is ready!');
@@ -150,6 +150,9 @@ export function HomePage() {
     setRecommendation(null);
     setStreamingText('');
   };
+  const COLORS = ['#F38020', '#6D28D9', '#0F172A', '#f5576c', '#4facfe'];
+  const pieData = recommendation?.tools.map(tool => ({ name: tool.toolName, value: tool.monthlyCost })) || [];
+  const potentialSavings = recommendation ? (recommendation.tools.length * 8 * 25) + (500 - recommendation.estimatedTotalMonthlyCost) : 0;
   const renderContent = () => {
     switch (appState) {
       case 'generating':
@@ -184,21 +187,34 @@ export function HomePage() {
             <div className="text-center mb-12">
               <h1 className="text-4xl md:text-5xl font-display font-bold text-balance leading-tight mb-4">{recommendation?.title}</h1>
               <p className="text-lg text-muted-foreground max-w-3xl mx-auto">{recommendation?.summary}</p>
-              <div className="mt-6 flex justify-center items-center gap-4 text-xl font-semibold">
-                <span>Estimated Monthly Cost:</span>
-                <span className="text-3xl font-bold text-gradient">${recommendation?.estimatedTotalMonthlyCost}</span>
-              </div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+                <Card className="lg:col-span-1"><CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">Est. Monthly Cost</CardTitle></CardHeader><CardContent><div className="text-4xl font-bold text-gradient flex items-center gap-2"><DollarSign /> ${recommendation?.estimatedTotalMonthlyCost}</div></CardContent></Card>
+                <Card className="lg:col-span-1"><CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">Potential Savings</CardTitle></CardHeader><CardContent><div className="text-4xl font-bold flex items-center gap-2"><TrendingUp /> ${potentialSavings.toFixed(0)}</div><p className="text-xs text-muted-foreground mt-1">vs. manual research & trial</p></CardContent></Card>
+                <Card className="lg:col-span-1 h-48"><CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">Cost Breakdown</CardTitle></CardHeader><CardContent className="h-full -mt-8">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={50} fill="#8884d8">
+                                {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                            </Pie>
+                            <Tooltip />
+                        </PieChart>
+                    </ResponsiveContainer>
+                </CardContent></Card>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {recommendation?.tools.map((tool, index) => (
                 <RecommendationCard key={tool.toolName} tool={tool} index={index} />
               )) ?? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-96 rounded-2xl" />)}
             </div>
-            <div className="mt-12 flex flex-col sm:flex-row justify-center items-center gap-6">
+            <div className="mt-12 flex flex-col sm:flex-row justify-center items-center gap-4 flex-wrap">
               <RecommendationExports stack={recommendation} />
               <Button variant="secondary" onClick={handleReset}>Start Over</Button>
               <Button variant="outline" onClick={() => setIsSupportChatOpen(true)}>
                 <LifeBuoy className="mr-2 h-4 w-4" /> Ask for Changes
+              </Button>
+              <Button asChild variant="outline">
+                <Link to="/marketplace"><Package className="mr-2 h-4 w-4" /> Explore Marketplace</Link>
               </Button>
             </div>
           </div>
@@ -206,7 +222,7 @@ export function HomePage() {
       case 'onboarding':
         return (
           <Card className="w-full max-w-3xl mx-auto p-6 md:p-8 animate-fade-in shadow-2xl bg-card/80 backdrop-blur-lg">
-            <OnboardingWizard onSubmit={handleWizardSubmit} isGenerating={appState === 'generating'} initialValues={userProfile} />
+            <OnboardingWizard onSubmit={handleWizardSubmit} isGenerating={Boolean(appState === 'generating')} initialValues={userProfile} />
           </Card>
         );
       case 'idle':
