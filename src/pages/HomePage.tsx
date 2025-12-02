@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Link, useSearchParams } from 'react-router-dom';
-import { Bot, BrainCircuit, FileText, LifeBuoy, Sparkles, AlertTriangle, LayoutDashboard } from 'lucide-react';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { Bot, BrainCircuit, FileText, LifeBuoy, Sparkles, AlertTriangle, LayoutDashboard, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Toaster, toast } from 'sonner';
@@ -29,6 +29,32 @@ async function getRecommendationBySession(sessionId: string): Promise<Recommenda
     return null;
   }
 }
+const MOCK_PROFILES: Record<string, UserProfile> = {
+  'content-creator': {
+    useCase: 'I want to build an AI-powered content creation assistant. It should help me write blog posts, generate social media captions, and create marketing copy based on a few keywords.',
+    ambition: 'discovery',
+    budget: 75,
+    constraints: ['simple', 'managed'],
+    integrations: ['notion'],
+  },
+  'ecommerce-ai': {
+    useCase: 'I need an AI system for my e-commerce store to provide personalized product recommendations and an intelligent customer support chatbot that can handle order tracking and FAQs.',
+    ambition: 'growth',
+    budget: 250,
+    constraints: ['managed'],
+    integrations: ['slack'],
+  },
+  'internal-automation': {
+    useCase: 'I want to automate internal document processing. The AI should be able to read PDFs, extract key information like invoice numbers and dates, and summarize the content.',
+    ambition: 'automation',
+    budget: 150,
+    constraints: ['oss'],
+    integrations: ['gcp'],
+  },
+};
+function getMockProfile(template: string): UserProfile | null {
+  return MOCK_PROFILES[template] || null;
+}
 export function HomePage() {
   const [appState, setAppState] = useState<AppState>('idle');
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -36,14 +62,21 @@ export function HomePage() {
   const [streamingText, setStreamingText] = useState('');
   const [isSupportChatOpen, setIsSupportChatOpen] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(() => {
-    return localStorage.getItem('stacksculptor_subscribed') === 'true';
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('stacksculptor_subscribed') === 'true';
+    }
+    return false;
   });
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   useEffect(() => {
-    localStorage.setItem('stacksculptor_subscribed', String(isSubscribed));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('stacksculptor_subscribed', String(isSubscribed));
+    }
   }, [isSubscribed]);
   useEffect(() => {
     const sessionId = searchParams.get('session');
+    const template = searchParams.get('template');
     if (sessionId) {
       const loadSession = async () => {
         setAppState('generating'); // Show loading state
@@ -54,24 +87,38 @@ export function HomePage() {
           setAppState('results');
         } else {
           toast.error("Could not load the specified stack.");
+          navigate('/');
           setAppState('idle');
         }
       };
       loadSession();
+    } else if (template) {
+      const mockProfile = getMockProfile(template);
+      if (mockProfile) {
+        setUserProfile(mockProfile);
+        setAppState('onboarding');
+        toast.info(`Loaded the "${template.replace('-', ' ')}" template!`);
+        // Clean the URL
+        setSearchParams({}, { replace: true });
+      } else {
+        toast.error("Invalid template specified.");
+        navigate('/');
+        setAppState('idle');
+      }
     } else {
       const savedProfile = loadUserProfile();
       if (savedProfile) {
         setUserProfile(savedProfile);
       }
     }
-  }, [searchParams]);
+  }, [searchParams, navigate, setSearchParams]);
   const handleStart = () => {
     if (!isSubscribed) {
       toast.error('Subscription Required', {
         description: 'Please subscribe for $20/month to generate a custom stack.',
         action: {
-          label: 'Subscribe Now',
-          onClick: () => setIsSubscribed(true),
+          label: 'View Pricing',
+          onClick: () => navigate('/pricing'),
         },
       });
       return;
@@ -159,7 +206,7 @@ export function HomePage() {
       case 'onboarding':
         return (
           <Card className="w-full max-w-3xl mx-auto p-6 md:p-8 animate-fade-in shadow-2xl bg-card/80 backdrop-blur-lg">
-            <OnboardingWizard onSubmit={handleWizardSubmit} isGenerating={appState === 'generating'} />
+            <OnboardingWizard onSubmit={handleWizardSubmit} isGenerating={appState === 'generating'} initialValues={userProfile} />
           </Card>
         );
       case 'idle':
@@ -177,7 +224,7 @@ export function HomePage() {
             <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto text-pretty">
               Overwhelmed by AI tools? Tell us your goal, and we'll design a custom, actionable tool stack with a step-by-step guide—in minutes.
             </p>
-            <div className="flex justify-center items-center gap-4">
+            <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
                 <Button size="lg" className="btn-gradient px-10 py-6 text-xl font-semibold" onClick={handleStart}>
                 Get Your Custom Stack
                 </Button>
@@ -200,15 +247,19 @@ export function HomePage() {
       </main>
       <footer className="absolute bottom-0 left-0 right-0 p-4">
         <div className="max-w-7xl mx-auto text-center text-muted-foreground text-sm space-y-2">
-          <div className="flex items-center justify-center gap-4 bg-secondary/50 p-2 rounded-lg max-w-md mx-auto">
+          <div className="flex items-center justify-center gap-4 bg-secondary/50 p-2 rounded-lg max-w-2xl mx-auto">
             <div className="flex items-center space-x-2">
               <Label htmlFor="sub-toggle">{isSubscribed ? "You are subscribed!" : "Mock Subscription ($20/mo)"}</Label>
               <Switch id="sub-toggle" checked={isSubscribed} onCheckedChange={setIsSubscribed} />
             </div>
+            <div className="h-4 w-px bg-border"></div>
+            <Button asChild variant="link" className="text-muted-foreground">
+                <Link to="/pricing"><DollarSign className="mr-1 size-4"/> View Pricing</Link>
+            </Button>
           </div>
           <div className="flex items-center justify-center gap-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg max-w-2xl mx-auto">
             <AlertTriangle className="size-4 text-amber-500 flex-shrink-0" />
-            <span>AI requests are subject to rate limits across all users. Built with ❤️ at Cloudflare.</span>
+            <span>AI requests are subject to rate limits. Built with ❤️ at Cloudflare.</span>
           </div>
         </div>
       </footer>

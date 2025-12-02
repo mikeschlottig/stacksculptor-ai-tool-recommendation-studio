@@ -1,13 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DashboardCard } from '@/components/DashboardCard';
+import { TemplateCard } from '@/components/TemplateCard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Toaster, toast } from 'sonner';
-import { Home, PlusCircle } from 'lucide-react';
+import { Home, PlusCircle, DollarSign, Layers, Clock } from 'lucide-react';
 import { RecommendationStack } from '@/lib/recommendation';
 import { SessionInfo } from '../../worker/types';
+import { motion } from 'framer-motion';
 type CombinedRecommendation = RecommendationStack & { sessionId: string; lastActive: number };
 async function fetchRecommendations(): Promise<CombinedRecommendation[]> {
   try {
@@ -60,6 +63,12 @@ export function Dashboard() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+  const { totalCost, timeSaved } = useMemo(() => {
+    const totalCost = recommendations.reduce((sum, rec) => sum + rec.estimatedTotalMonthlyCost, 0);
+    // Mock calculation: 8 hours saved per stack
+    const timeSaved = recommendations.length * 8;
+    return { totalCost, timeSaved };
+  }, [recommendations]);
   const handleSelect = (sessionId: string) => {
     navigate(`/?session=${sessionId}`);
   };
@@ -89,33 +98,62 @@ export function Dashboard() {
               </Button>
             </div>
           </header>
-          {isLoading ? (
+          <section className="mb-12">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card><CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">Total Stacks</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold flex items-center gap-2"><Layers /> {recommendations.length}</div></CardContent></Card>
+              <Card><CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">Est. Total Monthly Cost</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold flex items-center gap-2"><DollarSign /> ${totalCost}</div></CardContent></Card>
+              <Card><CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">Estimated Time Saved</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold flex items-center gap-2"><Clock /> {timeSaved} hrs</div></CardContent></Card>
+            </div>
+          </section>
+          <section className="mb-12">
+            <h2 className="text-3xl font-display font-bold mb-6">My Saved Stacks</h2>
+            {isLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-64 rounded-2xl" />)}
+              </div>
+            ) : recommendations.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {recommendations.map((rec, index) => (
+                  <DashboardCard key={rec.sessionId} recommendation={rec} onSelect={handleSelect} onDelete={handleDelete} index={index} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-20 border-2 border-dashed rounded-2xl">
+                <h3 className="text-2xl font-semibold">No Saved Stacks Yet</h3>
+                <p className="text-muted-foreground mt-2">Create your first AI stack recommendation to see it here.</p>
+                <Button asChild className="mt-6"><Link to="/">Create a New Stack</Link></Button>
+              </div>
+            )}
+          </section>
+          <section>
+            <h2 className="text-3xl font-display font-bold mb-6">Start from a Template</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-64 rounded-2xl" />
-              ))}
+              <TemplateCard
+                templateId="content-creator"
+                title="Content Creator"
+                description="AI tools for writing blog posts, social media content, and marketing copy."
+                icon="PenSquare"
+                tools={['LLM', 'Vector DB', 'Deployment']}
+                index={0}
+              />
+              <TemplateCard
+                templateId="ecommerce-ai"
+                title="E-commerce AI"
+                description="Power your store with personalized recommendations and a support chatbot."
+                icon="Store"
+                tools={['Agent', 'LLM', 'Monitoring']}
+                index={1}
+              />
+              <TemplateCard
+                templateId="internal-automation"
+                title="Internal Automation"
+                description="Automate document processing, data extraction, and internal workflows."
+                icon="Bot"
+                tools={['Data Processing', 'LLM', 'Agent']}
+                index={2}
+              />
             </div>
-          ) : recommendations.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {recommendations.map((rec, index) => (
-                <DashboardCard
-                  key={rec.sessionId}
-                  recommendation={rec}
-                  onSelect={handleSelect}
-                  onDelete={handleDelete}
-                  index={index}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-20 border-2 border-dashed rounded-2xl">
-              <h2 className="text-2xl font-semibold">No Saved Stacks Yet</h2>
-              <p className="text-muted-foreground mt-2">Create your first AI stack recommendation to see it here.</p>
-              <Button asChild className="mt-6">
-                <Link to="/">Create a New Stack</Link>
-              </Button>
-            </div>
-          )}
+          </section>
         </div>
       </div>
       <Toaster richColors />
