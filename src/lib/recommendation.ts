@@ -44,7 +44,7 @@ function buildPrompt(profile: UserProfile): string {
     **USER PROFILE:**
     - **Primary Use Case:** ${profile.useCase}
     - **Ambition/Success Criteria:** ${profile.ambition}
-    - **Monthly Budget:** Up to $${profile.budget}
+    - **Monthly Budget:** Up to ${profile.budget}
     - **Key Constraints:** ${profile.constraints.join(', ') || 'None'}
     - **Desired Integrations:** ${profile.integrations.join(', ') || 'None'}
     **YOUR TASK:**
@@ -111,6 +111,19 @@ export function parseRecommendation(raw: string): RecommendationStack | null {
   console.error("No valid JSON found in the response.");
   return null;
 }
+export async function saveRecommendation(stack: RecommendationStack, sessionId = chatService.getSessionId()): Promise<{ success: boolean }> {
+  try {
+    const res = await fetch('/api/recommendations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, recommendation: stack }),
+    });
+    return await res.json();
+  } catch (error) {
+    console.error("Failed to save recommendation:", error);
+    return { success: false };
+  }
+}
 /**
  * Generates a recommendation stack by sending a structured prompt to the AI.
  * @param profile - The user's profile.
@@ -124,7 +137,7 @@ export async function generateRecommendation(
   const prompt = buildPrompt(profile);
   let fullResponse = "";
   // Create a new session for this recommendation
-  const sessionRes = await chatService.createSession("StackSculptor Recommendation");
+  const sessionRes = await chatService.createSession(`Stack for: ${profile.useCase.substring(0, 30)}...`);
   if (sessionRes.success && sessionRes.data) {
     chatService.switchSession(sessionRes.data.sessionId);
   } else {
@@ -136,5 +149,24 @@ export async function generateRecommendation(
     onChunk(chunk); // Pass chunk to UI for live display
   });
   const parsed = parseRecommendation(fullResponse);
+  if (parsed) {
+    await saveRecommendation(parsed, chatService.getSessionId());
+  }
   return { raw: fullResponse, parsed };
+}
+export function saveUserProfile(profile: UserProfile) {
+  try {
+    localStorage.setItem('stacksculptor_profile', JSON.stringify(profile));
+  } catch (error) {
+    console.warn("Could not save user profile to localStorage:", error);
+  }
+}
+export function loadUserProfile(): UserProfile | null {
+  try {
+    const stored = localStorage.getItem('stacksculptor_profile');
+    return stored ? JSON.parse(stored) : null;
+  } catch (error) {
+    console.warn("Could not load user profile from localStorage:", error);
+    return null;
+  }
 }

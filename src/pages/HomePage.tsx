@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, BrainCircuit, FileText, LifeBuoy, Sparkles, AlertTriangle } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Bot, BrainCircuit, FileText, LifeBuoy, Sparkles, AlertTriangle, LayoutDashboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Toaster, toast } from 'sonner';
@@ -9,12 +10,25 @@ import { OnboardingWizard } from '@/components/OnboardingWizard';
 import { RecommendationCard } from '@/components/RecommendationCard';
 import { SupportChatPanel } from '@/components/SupportChatPanel';
 import { RecommendationExports } from '@/pages/RecommendationExports';
-import { generateRecommendation, UserProfile, RecommendationStack } from '@/lib/recommendation';
+import { generateRecommendation, UserProfile, RecommendationStack, saveUserProfile, loadUserProfile } from '@/lib/recommendation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { chatService } from '@/lib/chat';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 type AppState = 'idle' | 'onboarding' | 'generating' | 'results';
+async function getRecommendationBySession(sessionId: string): Promise<RecommendationStack | null> {
+  try {
+    const res = await fetch(`/api/recommendations/${sessionId}`);
+    const data = await res.json();
+    if (data.success) {
+      return data.data;
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch recommendation by session:", error);
+    return null;
+  }
+}
 export function HomePage() {
   const [appState, setAppState] = useState<AppState>('idle');
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -24,9 +38,33 @@ export function HomePage() {
   const [isSubscribed, setIsSubscribed] = useState(() => {
     return localStorage.getItem('stacksculptor_subscribed') === 'true';
   });
+  const [searchParams] = useSearchParams();
   useEffect(() => {
     localStorage.setItem('stacksculptor_subscribed', String(isSubscribed));
   }, [isSubscribed]);
+  useEffect(() => {
+    const sessionId = searchParams.get('session');
+    if (sessionId) {
+      const loadSession = async () => {
+        setAppState('generating'); // Show loading state
+        const rec = await getRecommendationBySession(sessionId);
+        if (rec) {
+          chatService.switchSession(sessionId);
+          setRecommendation(rec);
+          setAppState('results');
+        } else {
+          toast.error("Could not load the specified stack.");
+          setAppState('idle');
+        }
+      };
+      loadSession();
+    } else {
+      const savedProfile = loadUserProfile();
+      if (savedProfile) {
+        setUserProfile(savedProfile);
+      }
+    }
+  }, [searchParams]);
   const handleStart = () => {
     if (!isSubscribed) {
       toast.error('Subscription Required', {
@@ -42,6 +80,7 @@ export function HomePage() {
   };
   const handleWizardSubmit = async (data: UserProfile) => {
     setUserProfile(data);
+    saveUserProfile(data);
     setAppState('generating');
     setRecommendation(null);
     setStreamingText('');
@@ -62,7 +101,6 @@ export function HomePage() {
   const handleReset = () => {
     setAppState('onboarding');
     setRecommendation(null);
-    setUserProfile(null);
     setStreamingText('');
   };
   const renderContent = () => {
@@ -81,14 +119,16 @@ export function HomePage() {
             </div>
             <h2 className="text-3xl md:text-4xl font-display font-bold">Sculpting Your Stack...</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">Our AI is analyzing your requirements to build the perfect combination of tools. This may take a moment.</p>
-            <Card className="text-left bg-secondary/50 max-w-3xl mx-auto">
-              <CardContent className="p-6">
-                <pre className="whitespace-pre-wrap text-sm font-mono text-muted-foreground max-h-64 overflow-y-auto">
-                  {streamingText}
-                  <span className="animate-pulse">▋</span>
-                </pre>
-              </CardContent>
-            </Card>
+            {streamingText && (
+              <Card className="text-left bg-secondary/50 max-w-3xl mx-auto">
+                <CardContent className="p-6">
+                  <pre className="whitespace-pre-wrap text-sm font-mono text-muted-foreground max-h-64 overflow-y-auto">
+                    {streamingText}
+                    <span className="animate-pulse">▋</span>
+                  </pre>
+                </CardContent>
+              </Card>
+            )}
           </div>
         );
       case 'results':
@@ -137,9 +177,14 @@ export function HomePage() {
             <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto text-pretty">
               Overwhelmed by AI tools? Tell us your goal, and we'll design a custom, actionable tool stack with a step-by-step guide—in minutes.
             </p>
-            <Button size="lg" className="btn-gradient px-10 py-6 text-xl font-semibold" onClick={handleStart}>
-              Get Your Custom Stack
-            </Button>
+            <div className="flex justify-center items-center gap-4">
+                <Button size="lg" className="btn-gradient px-10 py-6 text-xl font-semibold" onClick={handleStart}>
+                Get Your Custom Stack
+                </Button>
+                <Button asChild size="lg" variant="outline">
+                    <Link to="/dashboard"><LayoutDashboard className="mr-2 size-5" /> View Dashboard</Link>
+                </Button>
+            </div>
           </div>
         );
     }
