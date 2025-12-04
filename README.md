@@ -2,7 +2,7 @@
 
 StackSculptor is a subscription-based AI-assisted platform designed for newcomers to the AI industry who feel overwhelmed by the sheer number of tools, marketing hype, and conflicting options. For just $20/month, users receive personalized recommendations that save them hundreds of dollars and dozens of hours. By sharing their use case and ambitions, the platform generates a custom AI tool stack, tailored workflows, a step-by-step starter guide, and ongoing support.
 
-[cloudflarebutton]
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/mikeschlottig/stacksculptor-ai-tool-recommendation-studio)
 
 ## Overview
 
@@ -138,7 +138,7 @@ For production:
 - Configure bindings in `wrangler.jsonc` (no modifications needed for core DOs).
 - Enable observability for logs and metrics.
 
-[cloudflarebutton]
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/mikeschlottig/stacksculptor-ai-tool-recommendation-studio)
 
 ## Contributing
 
